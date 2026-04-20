@@ -38,7 +38,9 @@ and summary plots appear in the output folder.
 - Python 3.11 or 3.12 (CI targets 3.12).
 - `pip` and `venv` (or any equivalent environment manager).
 - An input dataset consisting of ten `.mat` files (see
-  [Tab 1 — Data Inputs](#31-tab-1--data-inputs)).
+  [Tab 1 — Data Inputs](#31-tab-1--data-inputs)).  A ready-to-use sample
+  dataset is available via `./scripts/fetch_sample_data.sh` — see
+  [`SAMPLE_DATA.md`](SAMPLE_DATA.md) for details.
 
 ### From source
 
