@@ -1,0 +1,45 @@
+# ──────────────────────────────────────────────────────────────────────
+# SWUIFT desktop app
+# ──────────────────────────────────────────────────────────────────────
+
+# Python caches / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+dist_arm64/
+dist_x86_64/
+*.zip
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PyInstaller workspace
+*.manifest
+*.spec.bak
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime data (large) — each user supplies their own copy
+data/
+extracted_mat/
+outputs/
+
+# Inno Setup output
+Output/
+
+# CI artifact staging
+artifacts/
