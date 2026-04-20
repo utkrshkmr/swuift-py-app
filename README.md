@@ -14,20 +14,25 @@ and summary plots appear in the output folder.
 ## Table of Contents
 
 1. [Installation](#1-installation)
-2. [Launching the App](#2-launching-the-app)
-3. [UI Reference — every tab, every field](#3-ui-reference)
-   1. [Tab 1 — Data Inputs](#31-tab-1--data-inputs)
-   2. [Tab 2 — Grid & Time](#32-tab-2--grid--time)
-   3. [Tab 3 — Radiation](#33-tab-3--radiation)
-   4. [Tab 4 — Firebrands](#34-tab-4--firebrands)
-   5. [Tab 5 — Hardening & Seeds](#35-tab-5--hardening--seeds)
-   6. [Tab 6 — Output Settings](#36-tab-6--output-settings)
-   7. [Job Queue panel](#37-job-queue-panel)
-4. [Platform-specific first-launch warnings](#4-platform-specific-warnings)
-   1. [macOS — Gatekeeper / Privacy & Security](#41-macos)
-   2. [Windows — SmartScreen / admin elevation](#42-windows)
-   3. [Linux — executable bit](#43-linux)
-5. [Outputs produced by a run](#5-outputs)
+2. [Data Preparation](#2-data-preparation)
+   1. [Directory layout](#21-directory-layout)
+   2. [Eaton legacy data — what each file contains](#22-eaton-legacy-data)
+   3. [Extracting the Eaton sample data](#23-extracting-the-eaton-sample-data)
+   4. [Downloading the pre-extracted sample dataset](#24-downloading-the-pre-extracted-sample-dataset)
+3. [Launching the App](#3-launching-the-app)
+4. [UI Reference — every tab, every field](#4-ui-reference)
+   1. [Tab 1 — Data Inputs](#41-tab-1--data-inputs)
+   2. [Tab 2 — Grid & Time](#42-tab-2--grid--time)
+   3. [Tab 3 — Radiation](#43-tab-3--radiation)
+   4. [Tab 4 — Firebrands](#44-tab-4--firebrands)
+   5. [Tab 5 — Hardening & Seeds](#45-tab-5--hardening--seeds)
+   6. [Tab 6 — Output Settings](#46-tab-6--output-settings)
+   7. [Job Queue panel](#47-job-queue-panel)
+5. [Platform-specific first-launch warnings](#5-platform-specific-warnings)
+   1. [macOS — Gatekeeper / Privacy & Security](#51-macos)
+   2. [Windows — SmartScreen / admin elevation](#52-windows)
+   3. [Linux — executable bit](#53-linux)
+6. [Outputs produced by a run](#6-outputs)
 
 ---
 
@@ -37,10 +42,8 @@ and summary plots appear in the output folder.
 
 - Python 3.11 or 3.12 (CI targets 3.12).
 - `pip` and `venv` (or any equivalent environment manager).
-- An input dataset consisting of ten `.mat` files (see
-  [Tab 1 — Data Inputs](#31-tab-1--data-inputs)).  A ready-to-use sample
-  dataset is available via `./scripts/fetch_sample_data.sh` — see
-  [`SAMPLE_DATA.md`](SAMPLE_DATA.md) for details.
+- An input dataset of ten `.mat` files — see
+  [§2 Data Preparation](#2-data-preparation).
 
 ### From source
 
@@ -67,20 +70,156 @@ GitHub Actions builds binaries for every push (see
 | Windows ARM64       | `SWUIFT-windows-arm64.zip`     |
 
 Download an artifact, then see
-[§4 Platform-specific warnings](#4-platform-specific-warnings) for how
+[§5 Platform-specific warnings](#5-platform-specific-warnings) for how
 to bypass the first-launch security prompts.
 
 ---
 
-## 2. Launching the App
+## 2. Data Preparation
+
+The SWUIFT GUI consumes **ten per-variable `.mat` files**, one variable
+per file.  The reference dataset is the *Eaton* scenario: a wildfire
+scenario over a real wildland-urban neighbourhood at 10 m resolution.
+The repository ships two closely related folders for working with that
+dataset — a *legacy bundle* and the *extracted sample dataset* the
+application actually loads.
+
+### 2.1 Directory layout
+
+```text
+PROTOTYPE_APP/
+├── eaton_legacy_data/          # Original Eaton MATLAB bundle + extractors
+│   ├── default_values.mat      # Baseline parameter values and the tmpr curve
+│   ├── domains_mat.mat         # Domain classification raster
+│   ├── eaton_inputs_all.mat    # Bundled spatial inputs (see §2.2)
+│   ├── fire_prog.mat           # Known wildfire ignition progression
+│   ├── wind_eaton.mat          # Wind time-series (HDF5 v7.3, ~6.8 GB)
+│   ├── extract_inputs_to_mat.py    # → produces eaton_sample_data/*.mat
+│   └── extract_inputs_to_csv.py    # → produces eaton_sample_csv/*.csv
+│
+├── eaton_sample_data/          # Per-variable .mat files (app reads these)
+│   ├── binary_cover_landcover.mat
+│   ├── domain_matrix.mat
+│   ├── homes_matrix.mat
+│   ├── latitude.mat
+│   ├── longitude.mat
+│   ├── radiation_matrix.mat
+│   ├── spotting_matrix.mat
+│   ├── water_matrix.mat
+│   ├── wildland_fire_matrix.mat
+│   └── wind.mat                # copied verbatim from wind_eaton.mat
+│
+├── swuift/                     # Model source
+├── gui/                        # PySide6 GUI
+├── scripts/                    # Sample-data helpers (fetch / publish)
+├── swuift_app.py               # GUI entry point
+└── README.md
+```
+
+Only the contents of `eaton_sample_data/` are loaded by the GUI.  The
+legacy bundle in `eaton_legacy_data/` is kept so the extraction is
+reproducible — if upstream data changes you can regenerate the sample
+dataset by re-running the extractors.
+
+Neither `.mat` payload is tracked in git (see `.gitignore`): the legacy
+bundle lives on the maintainer's machine, and the sample dataset is
+published as a GitHub Release (§2.4).
+
+### 2.2 Eaton legacy data
+
+The files inside `eaton_legacy_data/` are the original MATLAB assets
+produced upstream.  Variables are packed together inside a small number
+of `.mat` files:
+
+| File                  | Type      | Variables it contains                       | Description                                                                                                                |
+| --------------------- | --------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `default_values.mat`  | MATLAB v5 | default run parameters + `tmpr` curve       | Baseline numerical constants used by the model when no GUI override is supplied (grid size, emissivity, tmpr array, …).    |
+| `domains_mat.mat`     | MATLAB v5 | `domains_mat` *(row × col int raster)*      | Domain classification: integer codes for roads, water, buildable structures, non-combustible, etc.                         |
+| `eaton_inputs_all.mat`| MATLAB v5 | `binary_cover`, `homes_mat`, `water`, `lati`, `long`, `hardening_mat_rad`, `hardening_mat_spo` | Bundled spatial inputs for the Eaton scenario — the landcover raster, building IDs, water mask, lat/long vectors, and both hardening masks. |
+| `fire_prog.mat`       | MATLAB v5 | `fire_prog` *(row × col × time int raster)* | Known wildfire ignition progression used as the boundary condition that seeds the urban-area simulation.                   |
+| `wind_eaton.mat`      | HDF5 v7.3 | `wind_s`, `wind_d` *(time × row × col)*     | Full wind time-series — speed (m/s) and direction (deg) per cell per timestep.  ~6.8 GB uncompressed.                      |
+
+Everything has a consistent grid resolution (10 m) and shares the same
+`(rows, cols)` extent.  Latitude/longitude are 1-D vectors whose lengths
+match the number of rows and columns respectively.
+
+### 2.3 Extracting the Eaton sample data
+
+The GUI loads one raster per `.mat` file, with stable file names and
+variable names.  Two helper scripts unpack the legacy bundle into that
+layout:
+
+```text
+eaton_legacy_data/extract_inputs_to_mat.py   → writes eaton_sample_data/*.mat
+eaton_legacy_data/extract_inputs_to_csv.py   → writes eaton_sample_csv/*.csv
+```
+
+The `.mat` extractor is what the application expects.  From the
+repository root:
+
+```bash
+python eaton_legacy_data/extract_inputs_to_mat.py
+```
+
+This reads the bundle, writes per-variable files to
+`eaton_sample_data/`, and copies `wind_eaton.mat` verbatim to
+`eaton_sample_data/wind.mat`.
+
+Output mapping:
+
+| Legacy source                 | Variable read       | Output file in `eaton_sample_data/` | Variable name inside output |
+| ----------------------------- | ------------------- | ----------------------------------- | --------------------------- |
+| `fire_prog.mat`               | `fire_prog`         | `wildland_fire_matrix.mat`          | `wildland_fire_matrix`      |
+| `domains_mat.mat`             | `domains_mat`       | `domain_matrix.mat`                 | `domains_mat`               |
+| `eaton_inputs_all.mat`        | `binary_cover`      | `binary_cover_landcover.mat`        | `binary_cover`              |
+| `eaton_inputs_all.mat`        | `homes_mat`         | `homes_matrix.mat`                  | `homes_mat`                 |
+| `eaton_inputs_all.mat`        | `water`             | `water_matrix.mat`                  | `water`                     |
+| `eaton_inputs_all.mat`        | `lati`              | `latitude.mat`                      | `lati`                      |
+| `eaton_inputs_all.mat`        | `long`              | `longitude.mat`                     | `long`                      |
+| `eaton_inputs_all.mat`        | `hardening_mat_rad` | `radiation_matrix.mat`              | `hardening_mat_rad`         |
+| `eaton_inputs_all.mat`        | `hardening_mat_spo` | `spotting_matrix.mat`               | `hardening_mat_spo`         |
+| `wind_eaton.mat` *(HDF5 v7.3)*| `wind_s`, `wind_d`  | `wind.mat`                          | `wind_s`, `wind_d`          |
+
+Override the destination if you'd rather write elsewhere:
+
+```bash
+python eaton_legacy_data/extract_inputs_to_mat.py --out-dir /tmp/swuift-inputs
+```
+
+A companion script `extract_inputs_to_csv.py` writes each raster as CSV
+into `eaton_sample_csv/` (useful for eyeballing the data in Excel /
+Pandas).  The GUI does **not** read CSV inputs.
+
+### 2.4 Downloading the pre-extracted sample dataset
+
+If you don't have access to `wind_eaton.mat` you can skip the extraction
+step entirely and fetch the pre-extracted sample dataset from the
+project's GitHub Release:
+
+```bash
+./scripts/fetch_sample_data.sh
+```
+
+This downloads each asset, verifies SHA-256 checksums, reassembles the
+split `wind.mat` chunks, and leaves everything under
+`eaton_sample_data/`.  Total download is ~7 GB.
+
+See [`SAMPLE_DATA.md`](SAMPLE_DATA.md) for release asset details, manual
+download instructions, and the maintainer workflow for publishing a new
+dataset.
+
+---
+
+## 3. Launching the App
 
 ```bash
 python swuift_app.py
 ```
 
 A PySide6 window opens with six configuration tabs, a live simulation
-log, and a job queue.  Fill in each tab, click **Add to Queue**, repeat
-for as many parameter sweeps as you want, then click **Run All**.
+log, and a job queue.  Fill in each tab (point Tab 1 at the ten files in
+`eaton_sample_data/`), click **Add to Queue**, repeat for as many
+parameter sweeps as you want, then click **Run All**.
 
 The **File** menu provides *Save Settings as JSON* (Ctrl+S) and
 *Load Settings from JSON* (Ctrl+O) to persist every tab's values
@@ -88,7 +227,7 @@ between sessions.
 
 ---
 
-## 3. UI Reference
+## 4. UI Reference
 
 The main window is split into three regions:
 
@@ -105,14 +244,14 @@ The main window is split into three regions:
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Tab 1 — Data Inputs
+### 4.1 Tab 1 — Data Inputs
 
 Ten file pickers.  Each must point to a real `.mat` file on disk (all
-are required).
+are required).  The defaults match the layout produced by §2.3.
 
 | Field                | What to select                                                                                                         |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Wildland Fire Matrix | `wildland_fire_matrix.mat` — known wildfire ignition progression (`knownig_mat`, row × col × time).                    |
+| Wildland Fire Matrix | `wildland_fire_matrix.mat` — known wildfire ignition progression (`wildland_fire_matrix`, row × col × time).           |
 | Domain Matrix        | `domain_matrix.mat` — domain classification raster (`domains_mat`).  Integer codes for roads, water, buildable, etc.   |
 | Binary Cover         | `binary_cover_landcover.mat` — `binary_cover` raster.  `+1` = structure, `−1` = burnable vegetation, `0` = non-burnable. |
 | Homes Matrix         | `homes_matrix.mat` — `homes_mat`, per-cell integer building ID (`0` = not a home).                                      |
@@ -134,7 +273,7 @@ stored via `QSettings` between sessions.
 - `fb_mass = 0.5 g` (brand mass), `fb_dist_mu = 0.0`, `fb_dist_sd = 1.0` (lognormal transport)
 - `tmpr` — 37-point temperature curve used by the radiation kernel
 
-### 3.2 Tab 2 — Grid & Time
+### 4.2 Tab 2 — Grid & Time
 
 Simulation start / end time.  The number of timesteps is derived
 automatically (`(t_end − t_start) / 5 min + 1`) and shown live.
@@ -149,7 +288,7 @@ A status line below the pickers shows the calculated step count
 If the end is before the start a red warning appears and the run cannot
 be queued.
 
-### 3.3 Tab 3 — Radiation
+### 4.3 Tab 3 — Radiation
 
 Controls the Stefan-Boltzmann structure-ignition test.
 
@@ -158,7 +297,7 @@ Controls the Stefan-Boltzmann structure-ignition test.
 | Ignition Threshold (W/m²)  | Minimum radiant flux a cell must receive to ignite.  Lower → structures ignite more easily.    | 14 000.0 | 0 – 100 000 |
 | Radiation Reduction Factor | Multiplicative damping of accumulated flux (0–1).  `1.0` = no reduction; `0.0` = radiation off. | 1.0      | 0.0 – 1.0   |
 
-### 3.4 Tab 4 — Firebrands
+### 4.4 Tab 4 — Firebrands
 
 Controls wind-driven brand transport statistics.  Brands are drawn from
 a lognormal distribution (`fb_dist_mu`, `fb_dist_sd` in config) and
@@ -171,7 +310,7 @@ and transverse scatter.
 | Wind Std Dev (longitudinal) | σ of along-wind scatter added to each landing.  Larger → more spread along wind axis. | 0.3     |
 | Wind Std Dev (transverse)   | σ of cross-wind scatter.  Larger → more lateral spread of brand landings.             | 4.85    |
 
-### 3.5 Tab 5 — Hardening & Seeds
+### 4.5 Tab 5 — Hardening & Seeds
 
 Hardening defines the fraction of structures that **resist** ignition;
 the two RNG seeds make a run reproducible.
@@ -183,7 +322,7 @@ the two RNG seeds make a run reproducible.
 | Seed — Hardening RNG          | Seed used to draw the uniform(0,1) hardening criterion for each home.  Same seed → same set of hardened homes. | 123456  |
 | Seed — Spread RNG             | Seed for all firebrand-transport and stochastic-ignition draws.  Same seed → same run.                          | 10      |
 
-### 3.6 Tab 6 — Output Settings
+### 4.6 Tab 6 — Output Settings
 
 | Field                             | Type      | What it does                                                                                                         | Default    |
 | --------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- | ---------- |
@@ -196,7 +335,7 @@ the two RNG seeds make a run reproducible.
 | Export radiation flux CSV / frame | Checkbox  | Write `radtotal` (W/m²) to `radiation_csv/step_XXX.csv` for every frame.                                              | Off        |
 | Export spotting CSV / frame       | Checkbox  | Write the firebrand-deposit matrix to `spotting_csv/step_XXX.csv` for every frame.                                    | Off        |
 
-### 3.7 Job Queue panel
+### 4.7 Job Queue panel
 
 The bottom dock lets you queue several runs with different parameter
 sets.  Columns are:
@@ -222,13 +361,13 @@ the same actions as the buttons.
 
 ---
 
-## 4. Platform-specific Warnings
+## 5. Platform-specific Warnings
 
 Because the binary is not signed with a paid Apple or Microsoft
 developer certificate, each OS warns on first launch.  Here is how to
 bypass each warning as the machine's administrator or owner.
 
-### 4.1 macOS
+### 5.1 macOS
 
 #### A. "SWUIFT can't be opened because Apple cannot check it for malicious software."
 
@@ -254,7 +393,7 @@ metadata), strip the attribute:
 xattr -dr com.apple.quarantine /Applications/SWUIFT.app
 ```
 
-### 4.2 Windows
+### 5.2 Windows
 
 #### A. SmartScreen: "Windows protected your PC"
 
@@ -290,7 +429,7 @@ Right-click `SWUIFT.exe` → **Run as administrator**.  You should **not**
 need admin for normal operation — SWUIFT writes only to the Output
 Folder you select, never to `Program Files` at runtime.
 
-### 4.3 Linux
+### 5.3 Linux
 
 No code-signing scheme is enforced; the bundle is a plain directory.
 
@@ -304,7 +443,7 @@ temporarily or add a permissive policy for the install path.
 
 ---
 
-## 5. Outputs
+## 6. Outputs
 
 Each run creates a new timestamped folder inside your chosen Output
 Folder, e.g. `outputs/run_20260420_142812/`:

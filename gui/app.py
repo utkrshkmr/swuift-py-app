@@ -12,8 +12,8 @@ from PySide6.QtWidgets import QApplication
 # Application-level directory constants
 # ---------------------------------------------------------------------------
 
-# When running from source, this is the PROTOTYPE_FAST_APP directory.
-# When running from a PyInstaller bundle, sys.argv[0] points to the exe/app.
+# When running from source, this is the repository root.  When running
+# from a PyInstaller bundle, ``sys.argv[0]`` points to the .exe / .app.
 APP_DIR: str = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 # The icon lives at the project root alongside this package.

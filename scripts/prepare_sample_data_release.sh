@@ -7,7 +7,7 @@
 #
 # Run this once (or whenever the sample dataset changes) from the repo
 # root.  Requires:
-#   - a populated ``extracted_mat/`` with the 9 small .mat files and
+#   - a populated ``eaton_sample_data/`` with the 9 small .mat files and
 #     wind.mat (see README data-inputs list)
 #   - ``gh`` (https://cli.github.com) authenticated:  gh auth login
 #
@@ -22,7 +22,7 @@ cd "$REPO_ROOT"
 
 TAG="${TAG:-sample-data-v1}"
 TITLE="${TITLE:-SWUIFT sample dataset ($TAG)}"
-SRC="extracted_mat"
+SRC="eaton_sample_data"
 STAGE="build/sample_data_$TAG"
 CHUNK_SIZE="1900m"         # BSD/GNU split accepts this; stays under 2 GB
 
@@ -37,8 +37,8 @@ fi
 
 mkdir -p "$STAGE"
 
-echo "── 1/4  Bundling small .mat files → $STAGE/extracted_mat_small.tar.gz"
-tar -czf "$STAGE/extracted_mat_small.tar.gz" -C "$SRC" \
+echo "── 1/4  Bundling small .mat files → $STAGE/eaton_sample_data_small.tar.gz"
+tar -czf "$STAGE/eaton_sample_data_small.tar.gz" -C "$SRC" \
     binary_cover_landcover.mat \
     domain_matrix.mat \
     homes_matrix.mat \
@@ -48,7 +48,7 @@ tar -czf "$STAGE/extracted_mat_small.tar.gz" -C "$SRC" \
     spotting_matrix.mat \
     water_matrix.mat \
     wildland_fire_matrix.mat
-du -h "$STAGE/extracted_mat_small.tar.gz"
+du -h "$STAGE/eaton_sample_data_small.tar.gz"
 
 echo ""
 echo "── 2/4  Splitting $SRC/wind.mat into $CHUNK_SIZE chunks"
@@ -58,7 +58,7 @@ ls -lh "$STAGE"/wind.mat.part.*
 
 echo ""
 echo "── 3/4  Computing SHA-256 checksums → $STAGE/SHA256SUMS"
-( cd "$STAGE" && shasum -a 256 extracted_mat_small.tar.gz wind.mat.part.* > SHA256SUMS )
+( cd "$STAGE" && shasum -a 256 eaton_sample_data_small.tar.gz wind.mat.part.* > SHA256SUMS )
 # Also include the pre-split wind.mat hash so users can verify the reassembled file.
 echo "$(shasum -a 256 "$SRC/wind.mat" | awk '{print $1}')  wind.mat  (reassembled)" \
     >> "$STAGE/SHA256SUMS"
@@ -74,7 +74,7 @@ if ! gh release view "$TAG" >/dev/null 2>&1; then
 fi
 
 gh release upload "$TAG" \
-    "$STAGE/extracted_mat_small.tar.gz" \
+    "$STAGE/eaton_sample_data_small.tar.gz" \
     "$STAGE"/wind.mat.part.* \
     "$STAGE/SHA256SUMS" \
     --clobber

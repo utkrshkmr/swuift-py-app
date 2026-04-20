@@ -33,9 +33,15 @@ Thumbs.db
 *.swp
 *.swo
 
-# Runtime data (large) — each user supplies their own copy
-data/
-extracted_mat/
+# Runtime data (large) — each user supplies their own copy.
+# The extraction scripts inside eaton_legacy_data/ are tracked; the
+# legacy .mat bundle they consume is not.  The full sample dataset
+# lives on GitHub Releases (see SAMPLE_DATA.md).
+eaton_legacy_data/*.mat
+eaton_legacy_data/.DS_Store
+eaton_sample_data/
+eaton_sample_csv/
+extracted_csv/
 outputs/
 
 # Inno Setup output

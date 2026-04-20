@@ -232,11 +232,12 @@ def load_all_extracted(
     wind_file: str,
     preload_wind: bool = True,
 ) -> SWUIFTData:
-    """Load data in the extracted-per-variable format into a SWUIFTData.
+    """Load SWUIFT inputs from the per-variable ``.mat`` layout.
 
-    This matches the streamlined "extracted" mode described in
-    EG_FAST_DATA_CONSUMPTION.md and performs strict dimension compatibility
-    checks on all rasters and coordinate vectors.
+    Each raster / vector lives in its own ``.mat`` file (as produced by
+    ``eaton_legacy_data/extract_inputs_to_mat.py``).  Strict dimension
+    compatibility checks are performed on every raster and coordinate
+    vector before returning.
     """
     knownig_mat = _load_single_v5(wildland_fire_matrix_file, "wildland_fire_matrix")
     domains_mat = _load_single_v5(domain_matrix_file, "domains_mat")

@@ -2,7 +2,7 @@
 REM ==========================================================================
 REM build_windows.bat  --  Build SWUIFT.exe for Windows (x86_64 or ARM64)
 REM
-REM Usage (run from the PROTOTYPE_FAST_APP directory):
+REM Usage (run from the project root):
 REM   build_windows.bat
 REM
 REM Prerequisites:
