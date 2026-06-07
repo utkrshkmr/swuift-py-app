@@ -1,12 +1,3 @@
-; =============================================================================
-; swuift_setup.iss  --  InnoSetup 6 installer script for SWUIFT
-;
-; Build: compile this file with InnoSetup 6 (ISCC.exe swuift_setup.iss)
-; or via build_windows.bat which calls ISCC automatically.
-;
-; Requires: PyInstaller output at dist\SWUIFT\
-; =============================================================================
-
 #define MyAppName      "SWUIFT"
 #define MyAppVersion   "1.0.0"
 #define MyAppPublisher "SWUIFT Project"

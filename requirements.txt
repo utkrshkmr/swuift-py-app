@@ -1,8 +1,0 @@
-numpy
-scipy
-h5py
-matplotlib
-imageio[ffmpeg]
-tqdm
-pytest
-av

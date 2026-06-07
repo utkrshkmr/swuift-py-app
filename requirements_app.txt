@@ -4,8 +4,8 @@ h5py
 matplotlib
 imageio[ffmpeg]
 tqdm
-pytest
 av
+numba
 PySide6>=6.6
 pyinstaller>=6.0
 Pillow

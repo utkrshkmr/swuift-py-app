@@ -1,22 +1,4 @@
 @echo off
-REM ==========================================================================
-REM build_windows.bat  --  Build SWUIFT.exe for Windows (x86_64 or ARM64)
-REM
-REM Usage (run from the project root):
-REM   build_windows.bat
-REM
-REM Prerequisites:
-REM   - Python 3.10+ installed and on PATH (or specify PYTHON_EXE below)
-REM   - A virtualenv at .venv (create with:
-REM       python -m venv .venv
-REM       .venv\Scripts\pip install -r requirements_app.txt)
-REM   - Optional: InnoSetup 6 installed for creating an installer
-REM
-REM PyInstaller detects the host architecture automatically.
-REM Run this script on an x86_64 Windows machine for an x86_64 build,
-REM or on a Windows ARM64 machine for an ARM64 build.
-REM ==========================================================================
-
 setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
@@ -31,7 +13,6 @@ echo ========================================
 echo  SWUIFT Windows build
 echo ========================================
 
-REM -- Generate SWUIFT.ico if not present -----------------------------------
 if not exist "SWUIFT.ico" (
     echo Generating SWUIFT.ico from SWUIFT.icns ...
     "%PYTHON%" -c "from PIL import Image; img = Image.open('SWUIFT.icns'); img.save('SWUIFT.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
@@ -42,7 +23,6 @@ if not exist "SWUIFT.ico" (
     )
 )
 
-REM -- Run PyInstaller -------------------------------------------------------
 echo.
 echo Running PyInstaller ...
 "%PYINSTALLER%" "%SPEC%" --noconfirm --clean
@@ -55,7 +35,6 @@ if errorlevel 1 (
 echo.
 echo Build complete: dist\SWUIFT\SWUIFT.exe
 
-REM -- Optional: InnoSetup installer ----------------------------------------
 if exist "swuift_setup.iss" (
     echo.
     echo Creating Windows installer with InnoSetup ...
