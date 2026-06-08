@@ -1,11 +1,13 @@
 from __future__ import annotations
 import math
 import os
+import sys
 from typing import TYPE_CHECKING
 import numpy as np
 if TYPE_CHECKING:
     pass
 _KERNEL_BACKEND = os.environ.get('SWUIFT_APP_KERNEL_BACKEND', 'numba').strip().lower()
+_NUMBA_CACHE = not getattr(sys, 'frozen', False)
 
 def kernel_backend() -> str:
     return 'numba' if _use_numba() else 'python'
@@ -142,7 +144,7 @@ _NUMBA_AVAILABLE = False
 try:
     import numba
 
-    @numba.njit(cache=True)
+    @numba.njit(cache=_NUMBA_CACHE)
     def _angle_deg_numba(dx: int, dy: int) -> float:
         if dx == 0 and dy == 0:
             return -9999.0
@@ -162,7 +164,7 @@ try:
             angle = 0.0
         return angle + ac
 
-    @numba.njit(cache=True)
+    @numba.njit(cache=_NUMBA_CACHE)
     def radiation_kernel_numba(source_rows: np.ndarray, source_cols: np.ndarray, fire_vals: np.ndarray, wind_dirs: np.ndarray, rows: int, cols: int, grid_size: float, radtotal: np.ndarray, tmpr: np.ndarray, rad_rf: float, aes: float, emissivity: float, sconst: float) -> np.ndarray:
         pi = math.pi
         ambient_T4 = 293.15 ** 4
@@ -203,7 +205,7 @@ try:
                     radtotal[ii, jj] += val
         return radtotal
 
-    @numba.njit(cache=True)
+    @numba.njit(cache=_NUMBA_CACHE)
     def brand_transport_kernel_numba(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, min_count: int, randn_vec: np.ndarray) -> np.ndarray:
         deg2rad = math.pi / 180.0
         grid_size_f = float(grid_size)
@@ -273,7 +275,7 @@ try:
             out[k, 1] = out_counts[k]
         return out
 
-    @numba.njit(cache=True)
+    @numba.njit(cache=_NUMBA_CACHE)
     def max_brands_in_circle_numba(points: np.ndarray, radius: float) -> int:
         n = points.shape[0]
         if n == 0:
@@ -293,7 +295,8 @@ try:
                 best = cnt
         return best
     _NUMBA_AVAILABLE = True
-except ImportError:
+except Exception:
+    # Frozen apps can fail Numba initialization before the UI starts; use Python kernels instead.
     pass
 
 def radiation_kernel(source_rows: np.ndarray, source_cols: np.ndarray, fire_vals: np.ndarray, wind_dirs: np.ndarray, rows: int, cols: int, grid_size: float, radtotal: np.ndarray, tmpr: np.ndarray, rad_rf: float, aes: float, emissivity: float, sconst: float) -> np.ndarray:
