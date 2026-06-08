@@ -34,7 +34,6 @@ def _radiation_chunk_worker(args) -> np.ndarray:
     return radiation_kernel(source_rows, source_cols, fire_vals, wind_dirs, rows, cols, grid_size, partial, tmpr, rad_rf, aes, emissivity, sconst)
 
 def brand_gen(cfg: SWUIFTConfig, rows: int, cols: int, binary_cover: np.ndarray, fire: np.ndarray, fstep: int, lstep: int, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_veg_gen: int, fb_str_ig: int, veg_included: bool, tstep: int, domains_mat: np.ndarray, rng: np.random.RandomState) -> Tuple[np.ndarray, np.ndarray]:
-    del fb_str_ig
     brand_gen_mat = np.zeros((rows, cols), dtype=np.float64)
     str_mask = (binary_cover > 0) & (fire >= fstep) & (fire <= lstep)
     if np.any(str_mask):
@@ -51,7 +50,7 @@ def brand_gen(cfg: SWUIFTConfig, rows: int, cols: int, binary_cover: np.ndarray,
     source_rows = nz[0].astype(np.int64)
     source_cols = nz[1].astype(np.int64)
     nb_arr = brand_gen_mat[nz].astype(np.int64)
-    deposits = brand_transport_kernel(source_rows, source_cols, nb_arr, rows, cols, cfg.grid_size, wind_s_2d, wind_d_2d, cfg.fb_wind_coef, cfg.fb_wind_sd, cfg.fb_wind_sd_transverse, rng)
+    deposits = brand_transport_kernel(source_rows, source_cols, nb_arr, rows, cols, cfg.grid_size, wind_s_2d, wind_d_2d, cfg.fb_wind_coef, cfg.fb_wind_sd, cfg.fb_wind_sd_transverse, fb_str_ig, rng)
     if deposits.shape[0] == 0:
         empty = np.empty((2, 0), dtype=np.int64)
         return (empty, brand_gen_mat)

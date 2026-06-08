@@ -18,9 +18,9 @@ jobs:
     name: macOS arm64 (.app + .dmg)
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: arm64
@@ -56,7 +56,7 @@ jobs:
             -ov -format UDZO \
             "dist/SWUIFT_macOS_arm64.dmg"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SWUIFT-macos-arm64
           path: |
@@ -68,9 +68,9 @@ jobs:
     name: Windows x64 (.exe + Inno Setup installer)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
@@ -106,7 +106,7 @@ jobs:
           if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
           & "$iscc" swuift_setup.iss
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SWUIFT-windows-x64
           path: |
@@ -118,19 +118,21 @@ jobs:
     name: Windows ARM64 (.exe)
     runs-on: windows-11-arm
     continue-on-error: true
+    env:
+      SWUIFT_APP_KERNEL_BACKEND: python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: arm64
 
-      - name: Install build dependencies
+      - name: Install build dependencies without Numba
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements_app.txt
+          pip install numpy scipy h5py matplotlib "imageio[ffmpeg]" tqdm PySide6 Pillow pyinstaller
 
       - name: Ensure SWUIFT.ico exists
         shell: pwsh
@@ -145,7 +147,7 @@ jobs:
           pyinstaller swuift_app.spec --noconfirm --clean
           Get-ChildItem dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SWUIFT-windows-arm64
           path: |

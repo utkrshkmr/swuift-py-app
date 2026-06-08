@@ -74,10 +74,11 @@ def radiation_kernel_py(source_rows: np.ndarray, source_cols: np.ndarray, fire_v
                 radtotal[ii, jj] += val
     return radtotal
 
-def brand_transport_kernel_py(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, rng: np.random.RandomState) -> np.ndarray:
+def brand_transport_kernel_py(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, min_count: int, rng: np.random.RandomState) -> np.ndarray:
     deg2rad = math.pi / 180.0
     grid_size_f = float(grid_size)
-    total_counts = np.zeros(rows * cols, dtype=np.int64)
+    out_idx = []
+    out_counts = []
     for s in range(source_rows.shape[0]):
         si = int(source_rows[s])
         sj = int(source_cols[s])
@@ -89,9 +90,12 @@ def brand_transport_kernel_py(source_rows: np.ndarray, source_cols: np.ndarray, 
         wd_sin = math.sin(wdeg * deg2rad)
         wd_cos = math.cos(wdeg * deg2rad)
         mu_ln = math.log(fb_wind_coef * ws) if ws > 0 else -30.0
-        for _ in range(nb):
-            dforward = math.exp(mu_ln + fb_wind_sd * rng.randn())
-            dlateral = fb_wind_sd_transverse * rng.randn()
+        forward_normals = rng.randn(nb)
+        lateral_normals = rng.randn(nb)
+        source_counts: dict[int, int] = {}
+        for b in range(nb):
+            dforward = math.exp(mu_ln + fb_wind_sd * forward_normals[b])
+            dlateral = fb_wind_sd_transverse * lateral_normals[b]
             dispy = -dforward * wd_sin + dlateral * wd_cos
             dispx = dforward * wd_cos + dlateral * wd_sin
             s_dispy = 1.0 if dispy > 0 else -1.0 if dispy < 0 else 0.0
@@ -102,13 +106,18 @@ def brand_transport_kernel_py(source_rows: np.ndarray, source_cols: np.ndarray, 
             dx = xnum + sj
             if dy < 0 or dy >= rows or dx < 0 or (dx >= cols):
                 continue
-            total_counts[dy * cols + dx] += 1
-    nz = np.flatnonzero(total_counts)
-    if nz.size == 0:
+            ind = dy * cols + dx
+            source_counts[ind] = source_counts.get(ind, 0) + 1
+        for ind in sorted(source_counts):
+            count = source_counts[ind]
+            if count >= min_count:
+                out_idx.append(ind)
+                out_counts.append(count)
+    if not out_idx:
         return np.empty((0, 2), dtype=np.int64)
-    out = np.empty((nz.size, 2), dtype=np.int64)
-    out[:, 0] = nz
-    out[:, 1] = total_counts[nz]
+    out = np.empty((len(out_idx), 2), dtype=np.int64)
+    out[:, 0] = np.asarray(out_idx, dtype=np.int64)
+    out[:, 1] = np.asarray(out_counts, dtype=np.int64)
     return out
 
 def max_brands_in_circle_py(points: np.ndarray, radius: float) -> int:
@@ -195,10 +204,17 @@ try:
         return radtotal
 
     @numba.njit(cache=True)
-    def brand_transport_kernel_numba(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, randn_vec: np.ndarray) -> np.ndarray:
+    def brand_transport_kernel_numba(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, min_count: int, randn_vec: np.ndarray) -> np.ndarray:
         deg2rad = math.pi / 180.0
         grid_size_f = float(grid_size)
-        total_counts = np.zeros(rows * cols, dtype=np.int64)
+        max_out = 0
+        for s in range(source_rows.shape[0]):
+            nb_tmp = int(brand_counts[s])
+            if nb_tmp > 0:
+                max_out += nb_tmp
+        out_indices = np.empty(max_out, dtype=np.int64)
+        out_counts = np.empty(max_out, dtype=np.int64)
+        out_n = 0
         rand_idx = 0
         for s in range(source_rows.shape[0]):
             si = int(source_rows[s])
@@ -206,15 +222,16 @@ try:
             nb = int(brand_counts[s])
             if nb <= 0:
                 continue
+            deposit_indices = np.empty(nb, dtype=np.int64)
+            deposit_n = 0
             ws = float(wind_s_2d[si, sj])
             wdeg = float(wind_d_2d[si, sj])
             wd_sin = math.sin(wdeg * deg2rad)
             wd_cos = math.cos(wdeg * deg2rad)
             mu_ln = math.log(fb_wind_coef * ws) if ws > 0 else -30.0
-            for _ in range(nb):
-                dforward = math.exp(mu_ln + fb_wind_sd * randn_vec[rand_idx])
-                dlateral = fb_wind_sd_transverse * randn_vec[rand_idx + 1]
-                rand_idx += 2
+            for b in range(nb):
+                dforward = math.exp(mu_ln + fb_wind_sd * randn_vec[rand_idx + b])
+                dlateral = fb_wind_sd_transverse * randn_vec[rand_idx + nb + b]
                 dispy = -dforward * wd_sin + dlateral * wd_cos
                 dispx = dforward * wd_cos + dlateral * wd_sin
                 s_dispy = 1.0 if dispy > 0 else -1.0 if dispy < 0 else 0.0
@@ -225,20 +242,35 @@ try:
                 dx = xnum + sj
                 if dy < 0 or dy >= rows or dx < 0 or (dx >= cols):
                     continue
-                total_counts[dy * cols + dx] += 1
-        nz_count = 0
-        for k in range(rows * cols):
-            if total_counts[k] != 0:
-                nz_count += 1
-        if nz_count == 0:
+                deposit_indices[deposit_n] = dy * cols + dx
+                deposit_n += 1
+            rand_idx += 2 * nb
+            if deposit_n == 0:
+                continue
+            sorted_deposits = np.sort(deposit_indices[:deposit_n])
+            current = sorted_deposits[0]
+            count = 1
+            for k in range(1, deposit_n):
+                ind = sorted_deposits[k]
+                if ind == current:
+                    count += 1
+                else:
+                    if count >= min_count:
+                        out_indices[out_n] = current
+                        out_counts[out_n] = count
+                        out_n += 1
+                    current = ind
+                    count = 1
+            if count >= min_count:
+                out_indices[out_n] = current
+                out_counts[out_n] = count
+                out_n += 1
+        if out_n == 0:
             return np.empty((0, 2), dtype=np.int64)
-        out = np.empty((nz_count, 2), dtype=np.int64)
-        out_idx = 0
-        for k in range(rows * cols):
-            if total_counts[k] != 0:
-                out[out_idx, 0] = k
-                out[out_idx, 1] = total_counts[k]
-                out_idx += 1
+        out = np.empty((out_n, 2), dtype=np.int64)
+        for k in range(out_n):
+            out[k, 0] = out_indices[k]
+            out[k, 1] = out_counts[k]
         return out
 
     @numba.njit(cache=True)
@@ -269,14 +301,14 @@ def radiation_kernel(source_rows: np.ndarray, source_cols: np.ndarray, fire_vals
         return radiation_kernel_numba(source_rows, source_cols, fire_vals, wind_dirs, rows, cols, grid_size, radtotal, tmpr, rad_rf, aes, emissivity, sconst)
     return radiation_kernel_py(source_rows, source_cols, fire_vals, wind_dirs, rows, cols, grid_size, radtotal, tmpr, rad_rf, aes, emissivity, sconst)
 
-def brand_transport_kernel(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, rng: np.random.RandomState) -> np.ndarray:
+def brand_transport_kernel(source_rows: np.ndarray, source_cols: np.ndarray, brand_counts: np.ndarray, rows: int, cols: int, grid_size: float, wind_s_2d: np.ndarray, wind_d_2d: np.ndarray, fb_wind_coef: float, fb_wind_sd: float, fb_wind_sd_transverse: float, min_count: int, rng: np.random.RandomState) -> np.ndarray:
     if _use_numba():
         total_brands = int(np.sum(brand_counts))
         if total_brands <= 0:
             return np.empty((0, 2), dtype=np.int64)
         randn_vec = np.ascontiguousarray(rng.randn(total_brands * 2), dtype=np.float64)
-        return brand_transport_kernel_numba(source_rows, source_cols, brand_counts, rows, cols, grid_size, wind_s_2d, wind_d_2d, fb_wind_coef, fb_wind_sd, fb_wind_sd_transverse, randn_vec)
-    return brand_transport_kernel_py(source_rows, source_cols, brand_counts, rows, cols, grid_size, wind_s_2d, wind_d_2d, fb_wind_coef, fb_wind_sd, fb_wind_sd_transverse, rng)
+        return brand_transport_kernel_numba(source_rows, source_cols, brand_counts, rows, cols, grid_size, wind_s_2d, wind_d_2d, fb_wind_coef, fb_wind_sd, fb_wind_sd_transverse, min_count, randn_vec)
+    return brand_transport_kernel_py(source_rows, source_cols, brand_counts, rows, cols, grid_size, wind_s_2d, wind_d_2d, fb_wind_coef, fb_wind_sd, fb_wind_sd_transverse, min_count, rng)
 
 def max_brands_in_circle(points: np.ndarray, radius: float) -> int:
     if points.size == 0:
