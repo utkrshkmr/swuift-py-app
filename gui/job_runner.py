@@ -10,6 +10,7 @@ from PySide6.QtCore import QThread, Signal
 from .job_queue import JobConfig, STATUS_DONE, STATUS_FAILED, STATUS_RUNNING
 
 class _JobCancelledError(Exception):
+    pass
 
 class _QtTqdm:
 
